@@ -57,12 +57,19 @@ function saveDevoteeName(name) {
   localStorage.setItem(DEVOTEE_NAME_KEY, name);
 }
 
+// Environment variable takes priority — baked into the build, permanent.
+// Falls back to localStorage for manual entry via settings panel.
+const ENV_SHEETS_URL = import.meta.env.VITE_SHEETS_URL || '';
+
 export function loadSheetsUrl() {
-  return localStorage.getItem(SHEETS_URL_KEY) || '';
+  return ENV_SHEETS_URL || localStorage.getItem(SHEETS_URL_KEY) || '';
 }
 
 export function saveSheetsUrl(url) {
-  localStorage.setItem(SHEETS_URL_KEY, url);
+  // Only save to localStorage if no env var is configured
+  if (!ENV_SHEETS_URL) {
+    localStorage.setItem(SHEETS_URL_KEY, url);
+  }
 }
 
 function loadLastSyncTime() {
