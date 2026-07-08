@@ -85,12 +85,117 @@ body {
   color: var(--text-primary);
   line-height: 1.5;
   min-height: 100vh;
+  position: relative;
+}
+
+/* Fixed divine background image — subtle and transparent */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: url('/images/guru-krishna-bg.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0.08;
+  filter: blur(2px);
+  z-index: 0;
+  pointer-events: none;
 }
 
 #root {
   max-width: 860px;
   margin: 0 auto;
   padding-bottom: 140px;
+  position: relative;
+  z-index: 1;
+}
+
+/* ─── Cloud Restore Prompt ──────────────────────────────── */
+.cloud-prompt {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  padding: var(--space-sm) var(--space-md);
+  background: linear-gradient(135deg, rgba(13,27,62,0.95), rgba(26,58,107,0.95));
+  border-bottom: 2px solid var(--gold-divine);
+  backdrop-filter: blur(12px);
+  animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+  from { transform: translateY(-100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.cloud-prompt-inner {
+  max-width: 860px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.cloud-prompt-icon {
+  font-size: 24px;
+}
+
+.cloud-prompt-text {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  min-width: 150px;
+}
+
+.cloud-prompt-btn {
+  padding: 6px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all var(--transition-fast);
+}
+
+.cloud-prompt-btn--load {
+  background: linear-gradient(135deg, var(--gold-divine), var(--gold-light));
+  color: #1a1a1a;
+}
+
+.cloud-prompt-btn--load:hover {
+  box-shadow: 0 0 12px rgba(212,160,23,0.5);
+}
+
+.cloud-prompt-btn--dismiss {
+  background: rgba(255,255,255,0.1);
+  color: var(--text-secondary);
+  border: 1px solid rgba(255,255,255,0.15);
+}
+
+.cloud-prompt-btn--dismiss:hover {
+  background: rgba(255,255,255,0.15);
+}
+
+/* ─── Action Status Message ─────────────────────────────── */
+.action-status-msg {
+  text-align: center;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px var(--space-md);
+  color: var(--gold-light);
+  animation: fadeInUp 0.3s ease;
+}
+
+@keyframes fadeInUp {
+  from { transform: translateY(8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 
 /* ─── Header ────────────────────────────────────────────── */

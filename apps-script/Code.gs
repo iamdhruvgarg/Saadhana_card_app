@@ -6,6 +6,7 @@
  * 
  * Each POST creates/overwrites a sheet tab named "Week-YYYY-MM-DD"
  * with all activity scores, SEVA minutes, and computed grades.
+ * Also saves raw JSON backup to "_raw_YYYY-MM-DD" for cloud restore.
  * 
  * Setup:
  * 1. Create a new Google Sheet
@@ -34,6 +35,25 @@ function doPost(e) {
       ss.deleteSheet(existingSheet);
     }
     var sheet = ss.insertSheet(tabName);
+    
+    // ─── Save raw JSON backup for cloud restore ──────────
+    var rawTabName = '_raw_' + payload.weekStart;
+    var existingRaw = ss.getSheetByName(rawTabName);
+    if (existingRaw) {
+      ss.deleteSheet(existingRaw);
+    }
+    var rawSheet = ss.insertSheet(rawTabName);
+    // Store the raw payload as JSON in cell A1, plus metadata
+    rawSheet.getRange('A1').setValue('weekData');
+    rawSheet.getRange('B1').setValue(JSON.stringify(payload.rawWeekData || {}));
+    rawSheet.getRange('A2').setValue('devoteeName');
+    rawSheet.getRange('B2').setValue(payload.devoteeName || '');
+    rawSheet.getRange('A3').setValue('weekStart');
+    rawSheet.getRange('B3').setValue(payload.weekStart);
+    rawSheet.getRange('A4').setValue('timestamp');
+    rawSheet.getRange('B4').setValue(new Date().toISOString());
+    // Hide the raw tab so it doesn't clutter the UI
+    rawSheet.hideSheet();
     
     // ─── Header Section ─────────────────────────────────
     var row = 1;
@@ -177,9 +197,62 @@ function doPost(e) {
 }
 
 function doGet(e) {
+  var action = (e && e.parameter && e.parameter.action) || 'status';
+  
+  if (action === 'status') {
+    return ContentService.createTextOutput(JSON.stringify({
+      status: 'ok',
+      message: 'Sadhana Card Apps Script is deployed and running.',
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  if (action === 'read') {
+    var week = e.parameter.week; // format: YYYY-MM-DD
+    if (!week) {
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'error',
+        message: 'Missing week parameter. Use ?action=read&week=YYYY-MM-DD',
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var rawTabName = '_raw_' + week;
+    var rawSheet = ss.getSheetByName(rawTabName);
+    
+    if (!rawSheet) {
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'not-found',
+        message: 'No backup data found for week ' + week,
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    // Read raw JSON from the backup tab
+    var weekDataJson = rawSheet.getRange('B1').getValue();
+    var devoteeName = rawSheet.getRange('B2').getValue();
+    var timestamp = rawSheet.getRange('B4').getValue();
+    
+    var weekData;
+    try {
+      weekData = JSON.parse(weekDataJson);
+    } catch (parseErr) {
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'error',
+        message: 'Failed to parse stored data: ' + parseErr.toString(),
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    return ContentService.createTextOutput(JSON.stringify({
+      status: 'ok',
+      week: week,
+      weekData: weekData,
+      devoteeName: devoteeName,
+      timestamp: timestamp,
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+  
   return ContentService.createTextOutput(JSON.stringify({
-    status: 'ok',
-    message: 'Sadhana Card Apps Script is deployed and running.',
+    status: 'error',
+    message: 'Unknown action: ' + action,
   })).setMimeType(ContentService.MimeType.JSON);
 }
 

@@ -149,6 +149,14 @@ function reducer(state, action) {
         weekData: loadWeekData(newMonday),
       };
     }
+    case 'LOAD_CLOUD_DATA': {
+      const { weekData, devoteeName } = action.payload;
+      return {
+        ...state,
+        weekData: weekData || state.weekData,
+        devoteeName: devoteeName || state.devoteeName,
+      };
+    }
     default:
       return state;
   }
@@ -393,6 +401,10 @@ export default function useSadhanaStore() {
     dispatch({ type: 'NAVIGATE_WEEK', payload: 1 });
   }, []);
 
+  const loadCloudData = useCallback((weekData, devoteeName) => {
+    dispatch({ type: 'LOAD_CLOUD_DATA', payload: { weekData, devoteeName } });
+  }, []);
+
   return {
     ...state,
     scores,
@@ -407,6 +419,7 @@ export default function useSadhanaStore() {
     setName,
     setSheetsUrl,
     setLastSyncTime,
+    loadCloudData,
     prevWeek,
     nextWeek,
   };

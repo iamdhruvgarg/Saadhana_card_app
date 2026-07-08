@@ -47,6 +47,28 @@ async function fetchWithRetry(url, options, maxRetries = 3) {
   }
 }
 
+// ─── Empty Data Check ───────────────────────────────────
+
+/**
+ * Returns true if the weekData has no meaningful values entered.
+ * Used to guard against accidentally overwriting good cloud data.
+ */
+export function isWeekDataEmpty(weekData) {
+  for (const day of DAYS) {
+    const dayData = weekData[day];
+    if (!dayData) continue;
+    for (const [key, val] of Object.entries(dayData)) {
+      // Skip note keys
+      if (key.endsWith('_note')) continue;
+      // Any non-null, non-zero value means data exists
+      if (val !== null && val !== undefined && val !== 0 && val !== '') {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 // ─── Main Sync Function ─────────────────────────────────
 
 /**
@@ -82,6 +104,8 @@ export async function syncToSheets(sheetsUrl, weekData, scores, devoteeName, wee
   const payload = {
     devoteeName: devoteeName || 'Unknown',
     weekStart: weekLabel,
+    // Raw weekData for cloud backup/restore
+    rawWeekData: weekData,
     activities: ACTIVITIES.map(a => ({
       id: a.id,
       label: a.label,
@@ -145,5 +169,61 @@ export async function syncToSheets(sheetsUrl, weekData, scores, devoteeName, wee
   } catch (err) {
     console.error('Sheets sync failed:', err);
     return 'error';
+  }
+}
+
+// ─── Load from Cloud ────────────────────────────────────
+
+/**
+ * Load week data from Google Sheets cloud backup.
+ *
+ * @param {string} sheetsUrl - The deployed Apps Script Web App URL
+ * @param {Date} weekStart - Monday of the week to load
+ * @returns {Promise<{status: string, weekData?: object, devoteeName?: string}>}
+ */
+export async function loadFromSheets(sheetsUrl, weekStart) {
+  if (!sheetsUrl || !sheetsUrl.trim()) {
+    return { status: 'not-configured' };
+  }
+
+  try {
+    new URL(sheetsUrl);
+  } catch {
+    return { status: 'not-configured' };
+  }
+
+  const d = new Date(weekStart);
+  const weekLabel = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+  const url = `${sheetsUrl}?action=read&week=${weekLabel}`;
+
+  try {
+    const response = await fetchWithRetry(url, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+    });
+
+    if (!response || response.type === 'opaqueredirect') {
+      return { status: 'error', message: 'Could not read from cloud' };
+    }
+
+    const json = await response.json();
+
+    if (json.status === 'not-found') {
+      return { status: 'not-found' };
+    }
+
+    if (json.status === 'error') {
+      return { status: 'error', message: json.message };
+    }
+
+    return {
+      status: 'ok',
+      weekData: json.weekData,
+      devoteeName: json.devoteeName || '',
+    };
+  } catch (err) {
+    console.error('Load from cloud failed:', err);
+    return { status: 'error', message: err.message };
   }
 }

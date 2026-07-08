@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import useSadhanaStore from './hooks/useSadhanaStore';
 import {
   ACTIVITIES,
@@ -17,12 +17,21 @@ import ScorePanel from './components/ScorePanel';
 import WeekGrid from './components/WeekGrid';
 import ActionBar from './components/ActionBar';
 import { exportCsv } from './utils/csvExport';
-import { syncToSheets } from './utils/sheetsSync';
+import { syncToSheets, loadFromSheets, isWeekDataEmpty } from './utils/sheetsSync';
 
 export default function App() {
   const store = useSadhanaStore();
   const [gridVisible, setGridVisible] = useState(false);
   const [syncStatus, setSyncStatus] = useState('idle');
+  const [loadStatus, setLoadStatus] = useState('idle'); // idle | loading | loaded | error | not-found
+  const [showCloudPrompt, setShowCloudPrompt] = useState(false);
+
+  // ─── Auto-prompt: detect empty state with configured URL ──
+  useEffect(() => {
+    if (store.sheetsUrl && isWeekDataEmpty(store.weekData)) {
+      setShowCloudPrompt(true);
+    }
+  }, []); // Only on mount
 
   // ─── Actions ─────────────────────────────────────────
   const handleSelectActivity = useCallback((activityId, value) => {
@@ -45,7 +54,16 @@ export default function App() {
     exportCsv(store.weekData, store.scores, store.devoteeName, store.weekStart);
   }, [store.weekData, store.scores, store.devoteeName, store.weekStart]);
 
+  // ─── Sync to Sheets (with blank guard) ───────────────
   const handleSyncSheets = useCallback(async () => {
+    // Fix 1: Blank sync guard
+    if (isWeekDataEmpty(store.weekData)) {
+      const confirmed = window.confirm(
+        'This week has no data entered. Syncing will overwrite any existing data in the sheet for this week.\n\nAre you sure you want to sync empty data?'
+      );
+      if (!confirmed) return;
+    }
+
     setSyncStatus('syncing');
     const result = await syncToSheets(
       store.sheetsUrl,
@@ -62,6 +80,29 @@ export default function App() {
       setTimeout(() => setSyncStatus('idle'), 3000);
     }
   }, [store.sheetsUrl, store.weekData, store.scores, store.devoteeName, store.weekStart]);
+
+  // ─── Load from Cloud ─────────────────────────────────
+  const handleLoadFromCloud = useCallback(async () => {
+    setLoadStatus('loading');
+    setShowCloudPrompt(false);
+    const result = await loadFromSheets(store.sheetsUrl, store.weekStart);
+
+    if (result.status === 'ok' && result.weekData) {
+      store.loadCloudData(result.weekData, result.devoteeName);
+      setLoadStatus('loaded');
+      setTimeout(() => setLoadStatus('idle'), 3000);
+    } else if (result.status === 'not-found') {
+      setLoadStatus('not-found');
+      setTimeout(() => setLoadStatus('idle'), 3000);
+    } else {
+      setLoadStatus('error');
+      setTimeout(() => setLoadStatus('idle'), 3000);
+    }
+  }, [store.sheetsUrl, store.weekStart, store]);
+
+  const handleDismissPrompt = useCallback(() => {
+    setShowCloudPrompt(false);
+  }, []);
 
   const handleToggleGrid = useCallback(() => {
     setGridVisible(prev => !prev);
@@ -84,6 +125,30 @@ export default function App() {
 
   return (
     <>
+      {/* ── Cloud restore prompt ── */}
+      {showCloudPrompt && (
+        <div className="cloud-prompt">
+          <div className="cloud-prompt-inner">
+            <span className="cloud-prompt-icon">☁️</span>
+            <span className="cloud-prompt-text">
+              No local data found. Load from cloud?
+            </span>
+            <button
+              className="cloud-prompt-btn cloud-prompt-btn--load"
+              onClick={handleLoadFromCloud}
+            >
+              Load from Cloud
+            </button>
+            <button
+              className="cloud-prompt-btn cloud-prompt-btn--dismiss"
+              onClick={handleDismissPrompt}
+            >
+              Start Fresh
+            </button>
+          </div>
+        </div>
+      )}
+
       <Header
         devoteeName={store.devoteeName}
         onNameChange={store.setName}
@@ -155,8 +220,10 @@ export default function App() {
         onSyncSheets={handleSyncSheets}
         onExportCsv={handleExportCsv}
         onToggleGrid={handleToggleGrid}
+        onLoadFromCloud={handleLoadFromCloud}
         gridVisible={gridVisible}
         syncStatus={syncStatus}
+        loadStatus={loadStatus}
       />
 
       {/* ── Week Grid ── */}
