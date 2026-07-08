@@ -100,8 +100,8 @@ body::before {
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  opacity: 0.08;
-  filter: blur(2px);
+  opacity: 0.20;
+  filter: blur(1px);
   z-index: 0;
   pointer-events: none;
 }
