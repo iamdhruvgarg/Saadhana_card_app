@@ -52,8 +52,23 @@ function doPost(e) {
     rawSheet.getRange('B3').setValue(payload.weekStart);
     rawSheet.getRange('A4').setValue('timestamp');
     rawSheet.getRange('B4').setValue(new Date().toISOString());
+    rawSheet.getRange('A5').setValue('vaniProgress');
+    rawSheet.getRange('B5').setValue(JSON.stringify(payload.vaniProgress || {}));
     // Hide the raw tab so it doesn't clutter the UI
     rawSheet.hideSheet();
+    
+    // ─── Save Vani progress to dedicated tab ─────────────
+    var vaniTabName = '_vani_progress';
+    var existingVani = ss.getSheetByName(vaniTabName);
+    if (existingVani) {
+      ss.deleteSheet(existingVani);
+    }
+    var vaniSheet = ss.insertSheet(vaniTabName);
+    vaniSheet.getRange('A1').setValue('vaniProgress');
+    vaniSheet.getRange('B1').setValue(JSON.stringify(payload.vaniProgress || {}));
+    vaniSheet.getRange('A2').setValue('timestamp');
+    vaniSheet.getRange('B2').setValue(new Date().toISOString());
+    vaniSheet.hideSheet();
     
     // ─── Header Section ─────────────────────────────────
     var row = 1;
@@ -230,6 +245,7 @@ function doGet(e) {
     var weekDataJson = rawSheet.getRange('B1').getValue();
     var devoteeName = rawSheet.getRange('B2').getValue();
     var timestamp = rawSheet.getRange('B4').getValue();
+    var vaniJson = rawSheet.getRange('B5').getValue();
     
     var weekData;
     try {
@@ -241,11 +257,28 @@ function doGet(e) {
       })).setMimeType(ContentService.MimeType.JSON);
     }
     
+    var vaniProgress = {};
+    try {
+      if (vaniJson) vaniProgress = JSON.parse(vaniJson);
+    } catch (e) { /* ignore */ }
+    
+    // Also try the dedicated vani tab if raw tab doesn't have it
+    if (!vaniJson || Object.keys(vaniProgress).length === 0) {
+      var vaniSheet = ss.getSheetByName('_vani_progress');
+      if (vaniSheet) {
+        try {
+          var vp = vaniSheet.getRange('B1').getValue();
+          if (vp) vaniProgress = JSON.parse(vp);
+        } catch (e) { /* ignore */ }
+      }
+    }
+    
     return ContentService.createTextOutput(JSON.stringify({
       status: 'ok',
       week: week,
       weekData: weekData,
       devoteeName: devoteeName,
+      vaniProgress: vaniProgress,
       timestamp: timestamp,
     })).setMimeType(ContentService.MimeType.JSON);
   }

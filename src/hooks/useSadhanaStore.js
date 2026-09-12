@@ -17,6 +17,7 @@ import {
 const DEVOTEE_NAME_KEY = 'sadhana-devotee-name';
 const SHEETS_URL_KEY = 'sadhana-sheets-url';
 const LAST_SYNC_KEY = 'sadhana-last-sync';
+const VANI_PROGRESS_KEY = 'sadhana-vani-progress';
 
 function weekKey(monday) {
   const d = new Date(monday);
@@ -83,6 +84,20 @@ function saveLastSyncTime(time) {
   }
 }
 
+function loadVaniProgress() {
+  try {
+    const stored = localStorage.getItem(VANI_PROGRESS_KEY);
+    if (stored) return JSON.parse(stored);
+  } catch { /* ignore */ }
+  return {};
+}
+
+function saveVaniProgress(progress) {
+  try {
+    localStorage.setItem(VANI_PROGRESS_KEY, JSON.stringify(progress));
+  } catch { /* ignore */ }
+}
+
 // ─── Reducer ───────────────────────────────────────────────
 
 const initialState = (monday) => ({
@@ -91,6 +106,7 @@ const initialState = (monday) => ({
   devoteeName: loadDevoteeName(),
   sheetsUrl: loadSheetsUrl(),
   lastSyncTime: loadLastSyncTime(),
+  vaniProgress: loadVaniProgress(),
   activeDay: DAYS[0],
   activeSection: 'NIDRA',
 });
@@ -155,6 +171,34 @@ function reducer(state, action) {
         ...state,
         weekData: weekData || state.weekData,
         devoteeName: devoteeName || state.devoteeName,
+      };
+    }
+    case 'TOGGLE_VANI_HEARD': {
+      const lecId = action.payload;
+      const prev = state.vaniProgress[lecId] || {};
+      return {
+        ...state,
+        vaniProgress: {
+          ...state.vaniProgress,
+          [lecId]: { ...prev, heard: !prev.heard },
+        },
+      };
+    }
+    case 'SET_VANI_REMARK': {
+      const { lecId, remarks } = action.payload;
+      const prev = state.vaniProgress[lecId] || {};
+      return {
+        ...state,
+        vaniProgress: {
+          ...state.vaniProgress,
+          [lecId]: { ...prev, remarks },
+        },
+      };
+    }
+    case 'LOAD_VANI_CLOUD': {
+      return {
+        ...state,
+        vaniProgress: action.payload || state.vaniProgress,
       };
     }
     default:
@@ -323,6 +367,11 @@ export default function useSadhanaStore() {
     saveLastSyncTime(state.lastSyncTime);
   }, [state.lastSyncTime]);
 
+  // Auto-save vani progress on change
+  useEffect(() => {
+    saveVaniProgress(state.vaniProgress);
+  }, [state.vaniProgress]);
+
   // Compute scores
   const scores = useMemo(() => computeScores(state.weekData), [state.weekData]);
 
@@ -405,6 +454,18 @@ export default function useSadhanaStore() {
     dispatch({ type: 'LOAD_CLOUD_DATA', payload: { weekData, devoteeName } });
   }, []);
 
+  const toggleVaniHeard = useCallback((lecId) => {
+    dispatch({ type: 'TOGGLE_VANI_HEARD', payload: lecId });
+  }, []);
+
+  const setVaniRemark = useCallback((lecId, remarks) => {
+    dispatch({ type: 'SET_VANI_REMARK', payload: { lecId, remarks } });
+  }, []);
+
+  const loadVaniCloud = useCallback((vaniProgress) => {
+    dispatch({ type: 'LOAD_VANI_CLOUD', payload: vaniProgress });
+  }, []);
+
   return {
     ...state,
     scores,
@@ -420,6 +481,9 @@ export default function useSadhanaStore() {
     setSheetsUrl,
     setLastSyncTime,
     loadCloudData,
+    toggleVaniHeard,
+    setVaniRemark,
+    loadVaniCloud,
     prevWeek,
     nextWeek,
   };

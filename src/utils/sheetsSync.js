@@ -83,9 +83,10 @@ export function isWeekDataEmpty(weekData) {
  * @param {object} scores - Computed scores from useSadhanaStore
  * @param {string} devoteeName - Devotee name
  * @param {Date} weekStart - Monday of the week
+ * @param {object} vaniProgress - Vani Syllabus lecture progress
  * @returns {Promise<'synced'|'error'|'not-configured'>}
  */
-export async function syncToSheets(sheetsUrl, weekData, scores, devoteeName, weekStart) {
+export async function syncToSheets(sheetsUrl, weekData, scores, devoteeName, weekStart, vaniProgress = {}) {
   if (!sheetsUrl || !sheetsUrl.trim()) {
     return 'not-configured';
   }
@@ -132,6 +133,7 @@ export async function syncToSheets(sheetsUrl, weekData, scores, devoteeName, wee
       totalPct: Math.round(scores.totalPct * 10) / 10,
       grade: scores.grade,
     },
+    vaniProgress,
   };
 
   try {
@@ -221,6 +223,7 @@ export async function loadFromSheets(sheetsUrl, weekStart) {
       status: 'ok',
       weekData: json.weekData,
       devoteeName: json.devoteeName || '',
+      vaniProgress: json.vaniProgress || null,
     };
   } catch (err) {
     console.error('Load from cloud failed:', err);
