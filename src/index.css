@@ -1040,6 +1040,8 @@ body::before {
   gap: 4px;
   padding: var(--space-xs) var(--space-md);
   margin-top: var(--space-sm);
+  position: relative;
+  z-index: 50;
 }
 
 .top-tab {
