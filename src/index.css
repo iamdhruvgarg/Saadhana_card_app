@@ -2046,3 +2046,151 @@ body::before {
     animation: none !important;
   }
 }
+
+/* ─── Login Page ────────────────────────────────────────── */
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-md);
+  position: relative;
+  z-index: 1;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 400px;
+  background: var(--bg-card);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border-gold);
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+}
+
+.login-header {
+  background: linear-gradient(135deg, var(--vishnu-deep) 0%, var(--vishnu-mid) 50%, var(--gold-divine) 100%);
+  padding: 40px 24px 32px;
+  text-align: center;
+}
+
+.login-om {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.login-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+  font-family: var(--font-main);
+}
+
+.login-subtitle {
+  font-size: 14px;
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+.login-body {
+  padding: 32px 24px;
+}
+
+.login-google-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 14px 24px;
+  border-radius: 12px;
+  border: 1px solid var(--border-gold);
+  background: rgba(255,255,255,0.06);
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-family: var(--font-main);
+}
+
+.login-google-btn:hover {
+  background: rgba(255,255,255,0.12);
+  border-color: var(--gold-divine);
+  box-shadow: 0 4px 20px rgba(212,160,23,0.15);
+}
+
+.login-google-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.login-google-icon {
+  flex-shrink: 0;
+}
+
+.login-error {
+  margin-top: 16px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(220,38,38,0.15);
+  color: #FCA5A5;
+  font-size: 13px;
+  text-align: center;
+}
+
+.login-footer {
+  padding: 16px 24px;
+  text-align: center;
+  border-top: 1px solid rgba(212,160,23,0.1);
+}
+
+.login-footer p {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* ─── Header User Row ───────────────────────────────────── */
+.header-user-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: var(--space-sm);
+  margin-bottom: var(--space-xs);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.header-user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid var(--gold-divine);
+  object-fit: cover;
+}
+
+.header-user-avatar--placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--gold-divine), var(--saffron-sacred));
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.header-user-name {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+/* ─── Dropdown Danger Item ──────────────────────────────── */
+.dropdown-item--danger {
+  color: #FCA5A5;
+}
+
+.dropdown-item--danger:hover {
+  background: rgba(220,38,38,0.15);
+}

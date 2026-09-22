@@ -1,19 +1,4 @@
-import { useState } from 'react';
 import { ShankhaSvg, ChakraSvg, GadaSvg, PadmaSvg } from './VishnuIcons';
-
-function formatTimeAgo(date) {
-  if (!date) return '';
-  const now = new Date();
-  const diffMs = now - date;
-  const diffSec = Math.floor(diffMs / 1000);
-  if (diffSec < 60) return 'just now';
-  const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24) return `${diffHr}h ago`;
-  const diffDay = Math.floor(diffHr / 24);
-  return `${diffDay}d ago`;
-}
 
 export default function Header({
   devoteeName,
@@ -21,13 +6,8 @@ export default function Header({
   weekStart,
   onPrevWeek,
   onNextWeek,
-  sheetsUrl,
-  onSheetsUrlChange,
-  syncStatus,
-  lastSyncTime,
+  user,
 }) {
-  const [settingsOpen, setSettingsOpen] = useState(false);
-
   const formattedDate = weekStart
     ? weekStart.toLocaleDateString('en-US', {
         month: 'short',
@@ -38,6 +18,22 @@ export default function Header({
 
   return (
     <header className="header">
+      {/* ── User avatar ── */}
+      {user && (
+        <div className="header-user-row">
+          {user.photoURL ? (
+            <img src={user.photoURL} alt="" className="header-user-avatar" referrerPolicy="no-referrer" />
+          ) : (
+            <div className="header-user-avatar header-user-avatar--placeholder">
+              {(user.displayName || user.email || '?')[0].toUpperCase()}
+            </div>
+          )}
+          <span className="header-user-name">
+            {user.displayName || user.email}
+          </span>
+        </div>
+      )}
+
       {/* ── Sacred Images ── */}
       <div className="header-images">
         <div className="header-img-wrap">
@@ -75,13 +71,6 @@ export default function Header({
             </div>
           </h1>
         </div>
-        <button
-          className="settings-btn"
-          onClick={() => setSettingsOpen((prev) => !prev)}
-          aria-label="Settings"
-        >
-          ⚙
-        </button>
       </div>
 
       <p className="header-verse">
@@ -109,40 +98,6 @@ export default function Header({
           →
         </button>
       </nav>
-
-      {/* ── Sync Status ── */}
-      {syncStatus && (
-        <div className="header-sync-row">
-          <span className={`sync-status-dot sync-status-dot--${syncStatus}`} />
-          <span className="sync-status-text">
-            {syncStatus === 'synced' ? `Synced ${lastSyncTime ? formatTimeAgo(lastSyncTime) : ''}` :
-             syncStatus === 'syncing' ? 'Syncing...' :
-             syncStatus === 'error' ? 'Sync failed' :
-             'Not synced'}
-          </span>
-        </div>
-      )}
-
-      {settingsOpen && (
-        <div className="settings-panel">
-          <label>
-            Apps Script Web App URL
-            <input
-              className="settings-input"
-              type="url"
-              value={sheetsUrl || ''}
-              onChange={(e) => onSheetsUrlChange(e.target.value)}
-              placeholder="https://script.google.com/macros/s/.../exec"
-            />
-          </label>
-          <button
-            className="settings-close"
-            onClick={() => setSettingsOpen(false)}
-          >
-            Close settings
-          </button>
-        </div>
-      )}
     </header>
   );
 }

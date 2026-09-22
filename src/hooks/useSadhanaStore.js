@@ -1,4 +1,4 @@
-import { useReducer, useEffect, useCallback, useMemo } from 'react';
+import { useReducer, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   DAYS,
   ACTIVITIES,
@@ -11,13 +11,14 @@ import {
   computeCustomMarks,
   getActivityWeeklyMax,
 } from '../data/activities';
+import {
+  saveWeekData as fbSaveWeek,
+  loadWeekData as fbLoadWeek,
+  saveVaniProgress as fbSaveVani,
+  loadVaniProgress as fbLoadVani,
+} from '../firebase/firestore';
 
-// ─── localStorage helpers ──────────────────────────────────
-
-const DEVOTEE_NAME_KEY = 'sadhana-devotee-name';
-const SHEETS_URL_KEY = 'sadhana-sheets-url';
-const LAST_SYNC_KEY = 'sadhana-last-sync';
-const VANI_PROGRESS_KEY = 'sadhana-vani-progress';
+// ─── localStorage helpers (offline cache) ──────────────────
 
 function weekKey(monday) {
   const d = new Date(monday);
@@ -25,6 +26,14 @@ function weekKey(monday) {
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
   return `sadhana-${yyyy}-${mm}-${dd}`;
+}
+
+function weekId(monday) {
+  const d = new Date(monday);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 function getMonday(date) {
@@ -36,7 +45,7 @@ function getMonday(date) {
   return d;
 }
 
-function loadWeekData(monday) {
+function loadWeekDataLocal(monday) {
   try {
     const stored = localStorage.getItem(weekKey(monday));
     if (stored) return JSON.parse(stored);
@@ -44,77 +53,49 @@ function loadWeekData(monday) {
   return createEmptyWeekData();
 }
 
-function saveWeekData(monday, data) {
+function saveWeekDataLocal(monday, data) {
   try {
     localStorage.setItem(weekKey(monday), JSON.stringify(data));
   } catch { /* ignore */ }
 }
 
-function loadDevoteeName() {
-  return localStorage.getItem(DEVOTEE_NAME_KEY) || '';
-}
-
-function saveDevoteeName(name) {
-  localStorage.setItem(DEVOTEE_NAME_KEY, name);
-}
-
-// Environment variable takes priority — baked into the build, permanent.
-// Falls back to localStorage for manual entry via settings panel.
-const ENV_SHEETS_URL = import.meta.env.VITE_SHEETS_URL || '';
-
-export function loadSheetsUrl() {
-  return ENV_SHEETS_URL || localStorage.getItem(SHEETS_URL_KEY) || '';
-}
-
-export function saveSheetsUrl(url) {
-  // Only save to localStorage if no env var is configured
-  if (!ENV_SHEETS_URL) {
-    localStorage.setItem(SHEETS_URL_KEY, url);
-  }
-}
-
-function loadLastSyncTime() {
-  const ts = localStorage.getItem(LAST_SYNC_KEY);
-  return ts ? new Date(parseInt(ts, 10)) : null;
-}
-
-function saveLastSyncTime(time) {
-  if (time) {
-    localStorage.setItem(LAST_SYNC_KEY, String(time.getTime()));
-  }
-}
-
-function loadVaniProgress() {
+function loadVaniLocal() {
   try {
-    const stored = localStorage.getItem(VANI_PROGRESS_KEY);
+    const stored = localStorage.getItem('sadhana-vani-progress');
     if (stored) return JSON.parse(stored);
   } catch { /* ignore */ }
   return {};
 }
 
-function saveVaniProgress(progress) {
+function saveVaniLocal(progress) {
   try {
-    localStorage.setItem(VANI_PROGRESS_KEY, JSON.stringify(progress));
+    localStorage.setItem('sadhana-vani-progress', JSON.stringify(progress));
   } catch { /* ignore */ }
+}
+
+function loadNameLocal() {
+  return localStorage.getItem('sadhana-devotee-name') || '';
+}
+
+function saveNameLocal(name) {
+  localStorage.setItem('sadhana-devotee-name', name);
 }
 
 // ─── Reducer ───────────────────────────────────────────────
 
 const initialState = (monday) => ({
   weekStart: monday,
-  weekData: loadWeekData(monday),
-  devoteeName: loadDevoteeName(),
-  sheetsUrl: loadSheetsUrl(),
-  lastSyncTime: loadLastSyncTime(),
-  vaniProgress: loadVaniProgress(),
+  weekData: loadWeekDataLocal(monday),
+  devoteeName: loadNameLocal(),
+  vaniProgress: loadVaniLocal(),
   activeDay: DAYS[0],
   activeSection: 'NIDRA',
+  firestoreLoaded: false,
 });
 
 function reducer(state, action) {
   switch (action.type) {
     case 'SET_ACTIVITY': {
-      // For pill-button activities: toggle (tap same value to deselect)
       const { day, activityId, value } = action.payload;
       const dayData = { ...state.weekData[day] };
       dayData[activityId] = dayData[activityId] === value ? null : value;
@@ -122,7 +103,6 @@ function reducer(state, action) {
       return { ...state, weekData };
     }
     case 'SET_CUSTOM_VALUE': {
-      // For custom-input activities: set raw hours/minutes value
       const { day, activityId, value } = action.payload;
       const dayData = { ...state.weekData[day] };
       dayData[activityId] = Math.max(0, Number(value) || 0);
@@ -137,11 +117,9 @@ function reducer(state, action) {
       return { ...state, weekData };
     }
     case 'SET_NOTE': {
-      // Store notes as activityId_note in the day data
       const { day, activityId, note } = action.payload;
       const dayData = { ...state.weekData[day] };
-      const noteKey = activityId + '_note';
-      dayData[noteKey] = note || '';
+      dayData[activityId + '_note'] = note || '';
       const weekData = { ...state.weekData, [day]: dayData };
       return { ...state, weekData };
     }
@@ -151,18 +129,15 @@ function reducer(state, action) {
       return { ...state, activeSection: action.payload };
     case 'SET_NAME':
       return { ...state, devoteeName: action.payload };
-    case 'SET_SHEETS_URL':
-      return { ...state, sheetsUrl: action.payload };
-    case 'SET_LAST_SYNC_TIME':
-      return { ...state, lastSyncTime: action.payload };
     case 'NAVIGATE_WEEK': {
-      const offset = action.payload; // -1 or +1
+      const offset = action.payload;
       const newMonday = new Date(state.weekStart);
       newMonday.setDate(newMonday.getDate() + offset * 7);
       return {
         ...state,
         weekStart: newMonday,
-        weekData: loadWeekData(newMonday),
+        weekData: loadWeekDataLocal(newMonday),
+        firestoreLoaded: false,
       };
     }
     case 'LOAD_CLOUD_DATA': {
@@ -171,6 +146,7 @@ function reducer(state, action) {
         ...state,
         weekData: weekData || state.weekData,
         devoteeName: devoteeName || state.devoteeName,
+        firestoreLoaded: true,
       };
     }
     case 'TOGGLE_VANI_HEARD': {
@@ -212,20 +188,17 @@ function computeScores(weekData) {
   let bodyTotal = 0;
   let soulTotal = 0;
   const sectionScores = {};
-  const activityWeeklyMarks = {}; // stores computed weekly marks per activity
+  const activityWeeklyMarks = {};
 
-  // Initialize section scores
   Object.keys(SECTIONS).forEach(s => {
     sectionScores[s] = { points: 0, max: 0 };
   });
 
-  // Compute weekly marks per activity
   ACTIVITIES.forEach(activity => {
     const section = SECTIONS[activity.section];
     let weeklyPoints;
 
     if (activity.inputType) {
-      // Custom-input: compute from weekly total of raw values
       let weeklySum = 0;
       DAYS.forEach(day => {
         weeklySum += Number(weekData[day]?.[activity.id]) || 0;
@@ -238,7 +211,6 @@ function computeScores(weekData) {
         target: activity.weeklyTarget,
       };
     } else {
-      // Pill-button: sum daily selected values
       weeklyPoints = 0;
       DAYS.forEach(day => {
         const val = weekData[day]?.[activity.id];
@@ -260,7 +232,6 @@ function computeScores(weekData) {
     sectionScores[activity.section].max += getActivityWeeklyMax(activity);
   });
 
-  // SEVA totals (minutes, no scoring)
   DAYS.forEach(day => {
     let sevaMinutes = 0;
     SEVA_ACTIVITIES.forEach(s => {
@@ -269,9 +240,8 @@ function computeScores(weekData) {
     sectionScores.SEVA.points += sevaMinutes;
   });
 
-  // Daily scores (for progress bars)
   const dailyScores = {};
-  DAYS.forEach((day, _i) => {
+  DAYS.forEach((day) => {
     let dayBody = 0;
     let dayBodyMax = 0;
     let daySoul = 0;
@@ -282,7 +252,6 @@ function computeScores(weekData) {
       const val = weekData[day]?.[activity.id];
 
       if (activity.inputType) {
-        // For custom-input activities: compute daily contribution as proportion
         const dailyTarget = activity.weeklyTarget / 7;
         const dailyMax = activity.weeklyMaxMarks / 7;
         const rawVal = Number(val) || 0;
@@ -296,7 +265,6 @@ function computeScores(weekData) {
           daySoulMax += dailyMax;
         }
       } else {
-        // Pill-button
         const points = val !== null && val !== undefined ? val : 0;
         if (section.scoreType === 'body') {
           dayBody += points;
@@ -343,37 +311,82 @@ function computeScores(weekData) {
 
 // ─── Hook ──────────────────────────────────────────────────
 
-export default function useSadhanaStore() {
+const FIRESTORE_SAVE_DELAY = 2000; // debounce Firestore writes by 2s
+
+export default function useSadhanaStore(uid) {
   const monday = useMemo(() => getMonday(new Date()), []);
   const [state, dispatch] = useReducer(reducer, monday, initialState);
+  const weekSaveTimer = useRef(null);
+  const vaniSaveTimer = useRef(null);
 
-  // Auto-save week data on change
+  // ─── Load from Firestore on mount + week change ───────
   useEffect(() => {
-    saveWeekData(state.weekStart, state.weekData);
-  }, [state.weekData, state.weekStart]);
+    if (!uid) return;
+    let cancelled = false;
 
-  // Auto-save devotee name on change
-  useEffect(() => {
-    saveDevoteeName(state.devoteeName);
-  }, [state.devoteeName]);
+    (async () => {
+      const wId = weekId(state.weekStart);
+      const result = await fbLoadWeek(uid, wId);
+      if (cancelled) return;
+      if (result && result.weekData) {
+        dispatch({ type: 'LOAD_CLOUD_DATA', payload: result });
+      }
+    })();
 
-  // Auto-save sheets URL on change
-  useEffect(() => {
-    saveSheetsUrl(state.sheetsUrl);
-  }, [state.sheetsUrl]);
+    return () => { cancelled = true; };
+  }, [uid, state.weekStart]);
 
-  // Auto-save lastSyncTime on change
+  // Load vani progress from Firestore on mount
   useEffect(() => {
-    saveLastSyncTime(state.lastSyncTime);
-  }, [state.lastSyncTime]);
+    if (!uid) return;
+    let cancelled = false;
 
-  // Auto-save vani progress on change
-  useEffect(() => {
-    saveVaniProgress(state.vaniProgress);
-  }, [state.vaniProgress]);
+    (async () => {
+      const vani = await fbLoadVani(uid);
+      if (cancelled) return;
+      if (vani && Object.keys(vani).length > 0) {
+        dispatch({ type: 'LOAD_VANI_CLOUD', payload: vani });
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [uid]);
 
   // Compute scores
   const scores = useMemo(() => computeScores(state.weekData), [state.weekData]);
+
+  // ─── Auto-save: localStorage (immediate) + Firestore (debounced) ──
+  useEffect(() => {
+    saveWeekDataLocal(state.weekStart, state.weekData);
+    saveNameLocal(state.devoteeName);
+
+    if (uid) {
+      if (weekSaveTimer.current) clearTimeout(weekSaveTimer.current);
+      weekSaveTimer.current = setTimeout(() => {
+        const wId = weekId(state.weekStart);
+        fbSaveWeek(uid, wId, state.weekData, scores, state.devoteeName);
+      }, FIRESTORE_SAVE_DELAY);
+    }
+
+    return () => {
+      if (weekSaveTimer.current) clearTimeout(weekSaveTimer.current);
+    };
+  }, [state.weekData, state.devoteeName, state.weekStart, uid, scores]);
+
+  useEffect(() => {
+    saveVaniLocal(state.vaniProgress);
+
+    if (uid) {
+      if (vaniSaveTimer.current) clearTimeout(vaniSaveTimer.current);
+      vaniSaveTimer.current = setTimeout(() => {
+        fbSaveVani(uid, state.vaniProgress);
+      }, FIRESTORE_SAVE_DELAY);
+    }
+
+    return () => {
+      if (vaniSaveTimer.current) clearTimeout(vaniSaveTimer.current);
+    };
+  }, [state.vaniProgress, uid]);
 
   // Day info for DayTabs
   const dayInfos = useMemo(() => {
@@ -434,14 +447,6 @@ export default function useSadhanaStore() {
     dispatch({ type: 'SET_NAME', payload: name });
   }, []);
 
-  const setSheetsUrl = useCallback((url) => {
-    dispatch({ type: 'SET_SHEETS_URL', payload: url });
-  }, []);
-
-  const setLastSyncTime = useCallback((time) => {
-    dispatch({ type: 'SET_LAST_SYNC_TIME', payload: time });
-  }, []);
-
   const prevWeek = useCallback(() => {
     dispatch({ type: 'NAVIGATE_WEEK', payload: -1 });
   }, []);
@@ -478,8 +483,6 @@ export default function useSadhanaStore() {
     setDay,
     setSection,
     setName,
-    setSheetsUrl,
-    setLastSyncTime,
     loadCloudData,
     toggleVaniHeard,
     setVaniRemark,
