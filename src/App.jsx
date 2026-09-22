@@ -18,6 +18,7 @@ import ScorePanel from './components/ScorePanel';
 import WeekGrid from './components/WeekGrid';
 import VaniTracker from './components/VaniTracker';
 import { exportCsv } from './utils/csvExport';
+import { loadFromSheets } from './utils/sheetsSync';
 import { signOut } from './firebase/auth';
 import { useRef, useEffect } from 'react';
 
@@ -26,6 +27,7 @@ export default function App({ user }) {
   const [gridVisible, setGridVisible] = useState(false);
   const [activeTab, setActiveTab] = useState('sadhana');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [isMigrating, setIsMigrating] = useState(false);
   const menuRef = useRef(null);
 
   // Close dropdown on outside click
@@ -70,6 +72,35 @@ export default function App({ user }) {
     setGridVisible(prev => !prev);
     setMenuOpen(false);
   }, []);
+
+  // ─── Google Sheets Migration ─────────────────────────
+  const handleMigrateSheets = useCallback(async () => {
+    const url = localStorage.getItem('migration-sheets-url') || prompt(
+      'Enter your Apps Script URL to pull this week\'s data from Google Sheets:\n\n(It will be saved to Firebase automatically)'
+    );
+    if (!url) return;
+    
+    localStorage.setItem('migration-sheets-url', url);
+    setMenuOpen(false);
+    setIsMigrating(true);
+
+    try {
+      const result = await loadFromSheets(url, store.weekStart);
+      if (result.status === 'ok') {
+        if (result.weekData) store.loadCloudData(result.weekData, result.devoteeName);
+        if (result.vaniProgress) store.loadVaniCloud(result.vaniProgress);
+        alert('✅ Successfully pulled data from Google Sheets! It is now saved in your Firebase account.');
+      } else if (result.status === 'not-found') {
+        alert('📭 No data found in Google Sheets for this specific week.');
+      } else {
+        alert('⚠️ Error loading from Sheets: ' + result.message);
+      }
+    } catch (err) {
+      alert('⚠️ Error: ' + err.message);
+    }
+    
+    setIsMigrating(false);
+  }, [store.weekStart, store]);
 
   // Current section activities
   const currentActivities = getActivitiesBySection(store.activeSection);
@@ -123,6 +154,9 @@ export default function App({ user }) {
           </button>
           {menuOpen && (
             <div className="dropdown-menu">
+              <button className="dropdown-item" onClick={handleMigrateSheets} disabled={isMigrating}>
+                {isMigrating ? '⏳ Pulling...' : '☁️ Pull from Google Sheets'}
+              </button>
               <button className="dropdown-item" onClick={handleExportCsv}>
                 📤 Export CSV
               </button>
