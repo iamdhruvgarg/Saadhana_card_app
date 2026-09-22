@@ -91,6 +91,7 @@ const initialState = (monday) => ({
   activeDay: DAYS[0],
   activeSection: 'NIDRA',
   firestoreLoaded: false,
+  vaniLoaded: false,
 });
 
 function reducer(state, action) {
@@ -149,6 +150,8 @@ function reducer(state, action) {
         firestoreLoaded: true,
       };
     }
+    case 'CLOUD_LOAD_COMPLETE':
+      return { ...state, firestoreLoaded: true };
     case 'TOGGLE_VANI_HEARD': {
       const lecId = action.payload;
       const prev = state.vaniProgress[lecId] || {};
@@ -175,8 +178,11 @@ function reducer(state, action) {
       return {
         ...state,
         vaniProgress: action.payload || state.vaniProgress,
+        vaniLoaded: true,
       };
     }
+    case 'VANI_LOAD_COMPLETE':
+      return { ...state, vaniLoaded: true };
     default:
       return state;
   }
@@ -330,6 +336,8 @@ export default function useSadhanaStore(uid) {
       if (cancelled) return;
       if (result && result.weekData) {
         dispatch({ type: 'LOAD_CLOUD_DATA', payload: result });
+      } else {
+        dispatch({ type: 'CLOUD_LOAD_COMPLETE' });
       }
     })();
 
@@ -346,6 +354,8 @@ export default function useSadhanaStore(uid) {
       if (cancelled) return;
       if (vani && Object.keys(vani).length > 0) {
         dispatch({ type: 'LOAD_VANI_CLOUD', payload: vani });
+      } else {
+        dispatch({ type: 'VANI_LOAD_COMPLETE' });
       }
     })();
 

@@ -117,8 +117,20 @@ export default function App({ user }) {
     return totals;
   }, [store.weekData]);
 
+  // If cloud data hasn't finished its initial load, show an overlay
+  const isSyncingInitial = !store.firestoreLoaded || !store.vaniLoaded;
+
   return (
     <>
+      {isSyncingInitial && (
+        <div className="login-page" style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(10, 22, 40, 0.85)' }}>
+          <div className="login-card" style={{ textAlign: 'center', padding: '40px', background: 'transparent', boxShadow: 'none', border: 'none' }}>
+            <div className="login-om" style={{ animation: 'pulse 1.5s infinite' }}>☁️</div>
+            <h2 className="login-title" style={{ fontSize: '20px' }}>Syncing with cloud...</h2>
+          </div>
+        </div>
+      )}
+
       <Header
         devoteeName={store.devoteeName}
         onNameChange={store.setName}
